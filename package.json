@@ -9,11 +9,16 @@
   "scripts": {
     "build": "tsc -b",
     "pretest": "npm run build",
-    "test": "vitest run"
+    "test": "vitest run",
+    "predemo": "npm run build",
+    "demo": "tsx scripts/demo.ts",
+    "precli": "npm run build",
+    "cli": "node packages/cli/dist/index.js"
   },
   "devDependencies": {
     "typescript": "^5.7.0",
     "vitest": "^3.0.0",
-    "@types/node": "^24.0.0"
+    "@types/node": "^24.0.0",
+    "tsx": "^4.19.0"
   }
 }

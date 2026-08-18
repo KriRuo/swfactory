@@ -3,6 +3,8 @@
   "references": [
     { "path": "packages/artifacts" },
     { "path": "packages/orchestrator" },
-    { "path": "fixtures/seed-app" }
+    { "path": "packages/cli" },
+    { "path": "fixtures/seed-app" },
+    { "path": "scripts" }
   ]
 }

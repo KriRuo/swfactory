@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
@@ -9,6 +9,8 @@ import { appendEvent, openEventLog, readEvents, type EventInput } from "../src/e
 import {
   approveArtifact,
   completeAgentRun,
+  completeAgentRunFromDispatch,
+  discoverAndCommitProducts,
   pendingAgentRuns,
   pendingApprovals,
   scheduleAgentRun,
@@ -243,5 +245,114 @@ describe("edge cases", () => {
         nextEvent: { type: "RequirementApproved", payload: {}, actor: "human:kris" },
       })
     ).rejects.toThrow(/not pending approval/);
+  });
+});
+
+describe("discoverAndCommitProducts", () => {
+  it("validates and commits files written directly (simulating an agent's own Write tool)", async () => {
+    // Bypasses writeArtifact on purpose — this is what a real agent session
+    // produces via its SDK Write tool, not our own serialization path.
+    writeFileSync(
+      join(repoRoot, "product", "use-cases", "USECASE-0001.md"),
+      [
+        "---",
+        "id: USECASE-0001",
+        "type: use-case",
+        "state: proposed",
+        "version: 1",
+        "createdAt: '2026-08-18T12:00:00.000Z'",
+        "modifiedAt: '2026-08-18T12:00:00.000Z'",
+        "createdBy: agent:AGENTRUN-0001",
+        "modifiedBy: agent:AGENTRUN-0001",
+        "provenance:",
+        "  source: product-re-agent",
+        "  reason: derived from evidence",
+        "relationships: []",
+        "title: Search notes by title",
+        "actors:",
+        "  - Notes API user",
+        "goal: Find a note without scrolling.",
+        "---",
+        "",
+      ].join("\n")
+    );
+    writeFileSync(
+      join(repoRoot, "product", "requirements", "REQ-0001.md"),
+      [
+        "---",
+        "id: REQ-0001",
+        "type: requirement",
+        "state: proposed",
+        "version: 1",
+        "createdAt: '2026-08-18T12:00:00.000Z'",
+        "modifiedAt: '2026-08-18T12:00:00.000Z'",
+        "createdBy: agent:AGENTRUN-0001",
+        "modifiedBy: agent:AGENTRUN-0001",
+        "provenance:",
+        "  source: product-re-agent",
+        "  reason: derived from evidence",
+        "relationships: []",
+        "approvalStatus: pending",
+        "statement: The system must allow searching notes by title.",
+        "priority: must",
+        "---",
+        "",
+      ].join("\n")
+    );
+
+    const result = await discoverAndCommitProducts(repoRoot);
+
+    expect(result.rejected).toEqual([]);
+    expect(result.committed.map((a) => a.id).sort()).toEqual(["REQ-0001", "USECASE-0001"]);
+
+    const log_ = await git(repoRoot, ["log", "--oneline"]);
+    expect(log_).toContain("requirement(REQ-0001): derived from evidence");
+    expect(log_).toContain("use-case(USECASE-0001): derived from evidence");
+  });
+
+  it("rejects a file that fails schema validation and leaves it uncommitted", async () => {
+    writeFileSync(
+      join(repoRoot, "product", "requirements", "REQ-0002.md"),
+      ["---", "id: REQ-0002", "type: requirement", "state: proposed", "---", ""].join("\n")
+    );
+
+    const result = await discoverAndCommitProducts(repoRoot);
+
+    expect(result.committed).toEqual([]);
+    expect(result.rejected).toHaveLength(1);
+    expect(result.rejected[0].path).toContain("REQ-0002.md");
+
+    const status = await git(repoRoot, ["status", "--porcelain", "--untracked-files=all", "--", "product"]);
+    expect(status).toContain("REQ-0002.md"); // still untracked — not committed
+  });
+
+  it("completeAgentRunFromDispatch marks the run failed and withholds auto-advance on a rejected file", async () => {
+    const evidence: Evidence = {
+      ...baseFields,
+      id: "EVID-0003",
+      type: "evidence",
+      state: "new",
+      createdBy: "human:kris",
+      modifiedBy: "human:kris",
+      provenance: { source: "user-submission", reason: "capture" },
+      kind: "observation",
+      summary: "triggers a run we'll fail on purpose",
+    };
+    await writeArtifact(repoRoot, evidence, "body");
+    const run = await emit({ type: "EvidenceAdded", payload: { evidenceId: evidence.id }, actor: "human:kris" });
+
+    writeFileSync(
+      join(repoRoot, "product", "requirements", "REQ-BROKEN.md"),
+      ["---", "type: requirement", "---", ""].join("\n")
+    );
+
+    const result = await completeAgentRunFromDispatch(repoRoot, log, run!.agentRun.id, {
+      output: "attempted to propose a requirement",
+      autoAdvanceEvent: { type: "RequirementApproved", payload: {}, actor: "orchestrator" },
+    });
+
+    expect(result.agentRun.state).toBe("failed");
+    expect(result.rejected).toHaveLength(1);
+    expect(readEvents(log).map((e) => e.type)).not.toContain("RequirementApproved");
   });
 });
