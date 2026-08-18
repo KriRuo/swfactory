@@ -4,9 +4,37 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository state
 
-This repository currently contains **specifications only** — there is no source code, build system, package manifest, or test suite yet. The entire content is the markdown document set in `agentic_software_factory_specs_md/`, which defines the concept, domain model, and architecture for an "Agentic Software Development Factory" that has not been implemented.
+**This repo is the implementation, not just specs.** `agentic_software_factory_specs_md/` still holds the design docs (below), but this is now a working npm workspaces monorepo — TypeScript/Node.js, the Claude Agent SDK for agent execution (one scoped session per agent role), a SQLite event log + in-process state machine for orchestration, git worktrees for Engineering-agent sandboxing, Markdown+YAML-frontmatter artifacts validated by Zod, and a CLI-only approval flow. The seed application (`fixtures/seed-app`) was built from scratch rather than forked — a small Express + `node:sqlite` "Notes API" — since no candidate reviewed in `10_MVP_BUILD_DECISIONS.md` met every criterion.
 
-**MVP scope and technology stack are decided** — see `10_MVP_BUILD_DECISIONS.md`, which supersedes the still-open items in `09_BUILD_PLAN_AND_OPEN_DECISIONS.md` §3. In short: this repo becomes the implementation (an npm workspaces monorepo), in TypeScript/Node.js, using the Claude Agent SDK for agent execution (one scoped session per agent role), a SQLite event log + in-process state machine for orchestration (no external workflow engine), git worktrees for Engineering-agent sandboxing (no containers in MVP), Markdown+YAML-frontmatter artifacts validated by Zod, and a CLI-only approval flow (web UI deferred). The one thing still open is which specific small TypeScript app to fork in as the seed application — selection criteria are fixed (TS, file-based DB, permissive license, existing tests) but the repo itself is picked live at fork-in time. If asked to start implementation, treat `10_MVP_BUILD_DECISIONS.md` §2 and `09_BUILD_PLAN_AND_OPEN_DECISIONS.md` §1 ("Recommended Build Sequence") as the starting point.
+Layout:
+```
+packages/artifacts/      Zod schemas for the 8 core entities + Markdown+YAML-frontmatter (de)serialization
+packages/orchestrator/   Git-backed /product store, SQLite event log, stage-policy state machine,
+                          per-role agent dispatchers under src/agents/
+packages/cli/            npm run cli -- submit|approve|plan|implement|status
+fixtures/seed-app/       The product being evolved by the factory (Express + node:sqlite)
+scripts/demo.ts          SDK-free walkthrough of the whole loop with fabricated agent output (npm run demo)
+product/                 The factory's own live product state (real artifacts from real agent runs)
+.sfai/                   Gitignored: event log (events.sqlite) + per-slice worktrees
+```
+
+Commands: `npm run build` (tsc -b, project references), `npm test` (vitest, ~30 tests, all SDK-free), `npm run demo` (simulated end-to-end loop, no API calls), `npm run cli -- <submit|approve|plan|implement|status>` (real Agent SDK calls — real cost/latency, see "Current build status" below).
+
+### Current build status
+
+Built one agent role at a time, each as its own commit, following `09_BUILD_PLAN_AND_OPEN_DECISIONS.md` §1's build sequence. Steps 1–7 are done and pushed to `origin/master`:
+
+| Step | What | Commit |
+|---|---|---|
+| 1–3 | Schemas, seed app, git-backed product state + event log | `c5d0024` |
+| 4 | Orchestrator state machine (stage policy, schedule/complete/approve) | `f5c0d68` |
+| 5 | Product/RE agent (real SDK) + CLI (`submit`/`approve`/`status`) | `3c460b0` |
+| 6 | Architecture/Planning agent (real SDK) + `plan` command | `d7d5dcb` |
+| 7 | Engineering agent (real SDK, git worktree isolation) + `implement` command | `63444f0` |
+
+**A real, live run is in progress in this repo's own `/product` tree** (the factory tracking itself as its first product, per `10_MVP_BUILD_DECISIONS.md` §2): `EVID-0001` → `REQ-0001` (approved) → `SLICE-0001` (add `GET /notes?q=` keyword search) → implemented and committed on branch `slice/SLICE-0001` in worktree `.sfai/worktrees/SLICE-0001`, 14/14 tests passing there. `AGENTRUN-0004` (verification) is pending — `npm run cli -- status` shows it. **Step 8 (Verification agent) is the very next piece of work** — it independently runs that worktree's test suite as a separate SDK session from Engineering (independence rule, `03_AGENT_MODEL.md` §3), produces a `VerificationResult`, and its approval is the Merge Gate that fires the loop's terminal `Integrated` event.
+
+**Pattern for continuing** (steps 5–7 all followed this — read one of those commit messages for the concrete shape): use plan mode before each new agent role (there's real design surface each time — steps 5→6 needed the discover-and-commit vs. write-then-commit split, 6→7 needed the auto-advance gating fix, 7 needed worktree isolation); build the agent dispatcher under `packages/orchestrator/src/agents/`; add the matching CLI command; run `npm run build && npm test`; then a **manual, deliberate real-cost dispatch** against this repo's own live run (not a throwaway fixture) as the actual verification — every phase so far has surfaced at least one real bug that automated tests couldn't catch (a `git status --porcelain` collapsing behavior, an event-ordering bug, a `vitest` root-resolution assumption). Commit and push each phase once it's verified.
 
 ## Document set
 
