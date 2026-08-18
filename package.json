@@ -1,0 +1,19 @@
+{
+  "name": "softwarefactory-ai",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "packages/*",
+    "fixtures/*"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "pretest": "npm run build",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0",
+    "@types/node": "^24.0.0"
+  }
+}

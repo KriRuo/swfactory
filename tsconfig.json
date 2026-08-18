@@ -1,0 +1,8 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/artifacts" },
+    { "path": "packages/orchestrator" },
+    { "path": "fixtures/seed-app" }
+  ]
+}
