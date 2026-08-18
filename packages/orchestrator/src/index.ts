@@ -5,3 +5,4 @@ export * from "./policy.js";
 export * from "./orchestrator.js";
 export * from "./agents/product-re.js";
 export * from "./agents/architecture-planning.js";
+export * from "./agents/engineering.js";

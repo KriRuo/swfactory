@@ -2,6 +2,7 @@ import type { ArtifactType } from "@sfai/artifacts";
 import { submit } from "./commands/submit.js";
 import { approve } from "./commands/approve.js";
 import { plan } from "./commands/plan.js";
+import { implement } from "./commands/implement.js";
 import { status } from "./commands/status.js";
 
 const [, , command, ...rest] = process.argv;
@@ -45,11 +46,21 @@ async function main(): Promise<void> {
       await plan(repoRoot, requirementId);
       break;
     }
+    case "implement": {
+      const sliceId = rest.find((a) => !a.startsWith("--"));
+      if (!sliceId) {
+        console.error("Usage: cli implement <sliceId>");
+        process.exitCode = 1;
+        return;
+      }
+      await implement(repoRoot, sliceId);
+      break;
+    }
     case "status":
       status(repoRoot);
       break;
     default:
-      console.error("Usage: cli <submit|approve|plan|status> ...");
+      console.error("Usage: cli <submit|approve|plan|implement|status> ...");
       process.exitCode = 1;
   }
 }
