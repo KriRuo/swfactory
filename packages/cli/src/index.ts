@@ -3,6 +3,7 @@ import { submit } from "./commands/submit.js";
 import { approve } from "./commands/approve.js";
 import { plan } from "./commands/plan.js";
 import { implement } from "./commands/implement.js";
+import { verify } from "./commands/verify.js";
 import { status } from "./commands/status.js";
 
 const [, , command, ...rest] = process.argv;
@@ -56,11 +57,14 @@ async function main(): Promise<void> {
       await implement(repoRoot, sliceId);
       break;
     }
+    case "verify":
+      await verify(repoRoot);
+      break;
     case "status":
       status(repoRoot);
       break;
     default:
-      console.error("Usage: cli <submit|approve|plan|implement|status> ...");
+      console.error("Usage: cli <submit|approve|plan|implement|verify|status> ...");
       process.exitCode = 1;
   }
 }
