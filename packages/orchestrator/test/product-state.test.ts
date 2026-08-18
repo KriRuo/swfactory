@@ -18,7 +18,9 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
-  rmSync(repoRoot, { recursive: true, force: true });
+  // maxRetries/retryDelay work around transient EPERM/EBUSY on Windows right
+  // after a burst of git subprocess writes (AV/indexer holding a handle).
+  rmSync(repoRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 const evidence: Evidence = {

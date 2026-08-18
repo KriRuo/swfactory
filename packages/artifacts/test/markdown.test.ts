@@ -39,4 +39,14 @@ describe("markdown round-trip", () => {
     const raw = "---\ntype: use-case\nid: USECASE-0002\n---\nbody";
     expect(() => parseArtifactFile(raw)).toThrow();
   });
+
+  it("serializes an artifact with an explicit `undefined` optional field (not just an omitted one)", () => {
+    // A common shape when spreading a partial update, e.g. `{ ...x, validationResult: maybeUndefined }`.
+    const withExplicitUndefined = { ...useCase, confidence: undefined };
+    expect(() => serializeArtifactFile(withExplicitUndefined, "body")).not.toThrow();
+
+    const raw = serializeArtifactFile(withExplicitUndefined, "body");
+    expect(raw).not.toContain("confidence");
+    expect(parseArtifactFile(raw).data).toEqual(useCase);
+  });
 });

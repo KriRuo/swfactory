@@ -69,13 +69,15 @@ export async function writeArtifact(
   return { filePath, commitHash };
 }
 
-export function readArtifact(
+/** Narrows `data` to the specific entity type via `type`, since the caller already knows what it asked for. */
+export function readArtifact<T extends ArtifactType>(
   repoRoot: string,
-  type: ArtifactType,
+  type: T,
   id: string
-): ParsedArtifactFile {
+): { data: Extract<Artifact, { type: T }>; body: string } {
   const raw = readFileSync(artifactPath(repoRoot, type, id), "utf-8");
-  return parseArtifactFile(raw);
+  const parsed = parseArtifactFile(raw);
+  return { data: parsed.data as Extract<Artifact, { type: T }>, body: parsed.body };
 }
 
 export function listArtifacts(repoRoot: string, type?: ArtifactType): ParsedArtifactFile[] {

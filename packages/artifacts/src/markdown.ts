@@ -21,7 +21,11 @@ export function parseArtifactFile(raw: string): ParsedArtifactFile {
 /** Serializes an artifact back to Markdown+YAML-frontmatter, validating first. */
 export function serializeArtifactFile(data: Artifact, body: string): string {
   const validated = artifactSchema.parse(data);
-  return matter.stringify(`${body}\n`, validated);
+  // js-yaml (via gray-matter) can't dump explicit `undefined` values — an
+  // optional field set to `undefined` rather than omitted (common when
+  // spreading a partial update) must become a genuinely absent key.
+  const withoutUndefined = JSON.parse(JSON.stringify(validated));
+  return matter.stringify(`${body}\n`, withoutUndefined);
 }
 
 /**

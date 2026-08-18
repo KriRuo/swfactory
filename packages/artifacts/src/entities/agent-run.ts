@@ -7,7 +7,7 @@ import { baseArtifactSchema } from "../base.js";
  */
 export const agentRunSchema = baseArtifactSchema.extend({
   type: z.literal("agent-run"),
-  state: z.enum(["running", "succeeded", "failed"]),
+  state: z.enum(["pending", "running", "succeeded", "failed"]),
   agentRole: z.enum([
     "orchestrator",
     "product-re",
