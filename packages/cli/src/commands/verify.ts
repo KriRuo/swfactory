@@ -71,8 +71,8 @@ export async function verify(repoRoot: string): Promise<void> {
   }
 
   // Parse test output to determine pass/fail
-  const testsPassed = (testOutput.match(/(\d+) passed/i) || [, "0"])[1];
-  const testsFailed = (testOutput.match(/(\d+) failed/i) || [, "0"])[1];
+  const testsPassed = (testOutput.match(/Tests\s+.*?(\d+)\s+passed/i) || [, "0"])[1];
+  const testsFailed = (testOutput.match(/Tests\s+.*?(\d+)\s+failed/i) || [, "0"])[1];
   const outcome = parseInt(testsFailed) === 0 ? "pass" : "fail";
 
   // Create the VerificationResult artifact
@@ -98,6 +98,7 @@ export async function verify(repoRoot: string): Promise<void> {
     ],
     method: "automated-test",
     outcome,
+    approvalStatus: outcome === "pass" ? "pending" : undefined,
     evidenceRefs: [],
     details: `Test suite: ${testsPassed} passed, ${testsFailed} failed`,
   };
@@ -149,7 +150,7 @@ ${testOutput}
       `Review verification evidence: product/tests/${verificationResultId}.md`
     );
     console.log(
-      `Then approve integration: npm run cli -- approve slice ${sliceId}`
+      `Then approve integration: npm run cli -- approve verification-result ${verificationResultId}`
     );
   }
 }

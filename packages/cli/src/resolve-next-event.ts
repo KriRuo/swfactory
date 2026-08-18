@@ -17,6 +17,14 @@ export function resolveNextEvent(
 ): EventInput & { type: EventType } {
   const { data } = readArtifact(repoRoot, type, id);
 
+  if (type === "verification-result") {
+    return {
+      type: "Integrated",
+      payload: { verificationResultId: id },
+      actor,
+    };
+  }
+
   const match = data.createdBy.match(/^agent:(.+)$/);
   if (!match) {
     throw new Error(

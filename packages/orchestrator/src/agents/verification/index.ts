@@ -1,6 +1,11 @@
+import { existsSync } from "node:fs";
+import { exec } from "node:child_process";
+import { promisify } from "node:util";
 import { join } from "node:path";
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import type { AgentRun, Slice } from "@sfai/artifacts";
+
+const execAsync = promisify(exec);
 
 export interface VerificationRunResult {
   success: boolean;
@@ -52,28 +57,55 @@ export async function runVerificationAgent(
   let testOutput = "";
   let success = false;
 
-  for await (const message of query({
-    prompt,
-    options: {
-      systemPrompt: SYSTEM_PROMPT,
-      cwd: seedAppDir,
-      allowedTools: ["Read", "Bash"],
-      disallowedTools: ["Bash(sudo *)", "Bash(rm -rf *)", "Bash(git push*)"],
-      permissionMode: "dontAsk",
-      maxTurns: 30,
-    },
-  })) {
-    if (message.type === "result") {
-      if (message.subtype === "success") {
-        success = !message.is_error;
-        resultText = message.result;
-        // Extract test output from the result
-        testOutput = resultText;
-      } else {
-        success = false;
-        resultText = `Agent run ended with ${message.subtype}: ${message.errors.join("; ")}`;
-        testOutput = resultText;
+  try {
+    for await (const message of query({
+      prompt,
+      options: {
+        systemPrompt: SYSTEM_PROMPT,
+        cwd: seedAppDir,
+        allowedTools: ["Read", "Bash"],
+        disallowedTools: ["Bash(sudo *)", "Bash(rm -rf *)", "Bash(git push*)"],
+        permissionMode: "dontAsk",
+        maxTurns: 30,
+      },
+    })) {
+      if (message.type === "result") {
+        if (message.subtype === "success") {
+          success = !message.is_error;
+          resultText = message.result;
+          testOutput = resultText;
+        } else {
+          success = false;
+          resultText = `Agent run ended with ${message.subtype}: ${message.errors.join("; ")}`;
+          testOutput = resultText;
+        }
       }
+    }
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    resultText = `Claude Agent SDK verification failed; falling back to direct test run. Reason: ${reason}`;
+
+    try {
+      const projectRoot = existsSync(join(worktreePath, "package.json")) ? worktreePath : process.cwd();
+      const testFile = join(worktreePath, "fixtures", "seed-app", "test", "notes.test.ts");
+      const shell = process.platform === "win32" ? "cmd.exe" : "/bin/bash";
+      const command = process.platform === "win32"
+        ? `".\\node_modules\\.bin\\vitest.cmd" run "${testFile}"`
+        : `"${join(projectRoot, "node_modules", ".bin", "vitest")}" run "${testFile}"`;
+      const { stdout, stderr } = await execAsync(command, {
+        cwd: projectRoot,
+        maxBuffer: 10 * 1024 * 1024,
+        shell,
+      });
+
+      testOutput = `${stdout}${stderr ? `\n${stderr}` : ""}`;
+      resultText = `${resultText}\n\n${testOutput}`;
+      success = true;
+    } catch (execError) {
+      const execMessage = execError instanceof Error ? execError.message : String(execError);
+      testOutput = execMessage;
+      resultText = `${resultText}\n\nDirect test execution failed. ${execMessage}`;
+      success = false;
     }
   }
 
